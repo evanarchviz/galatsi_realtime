@@ -176,67 +176,58 @@ async function init(){
 
             model = gltf.scene;
 
-            model.traverse((child) => {
+model.traverse((child) => {
 
-                if (!child.isMesh) return;
+    if (!child.isMesh) return;
 
-                // Hide helper cube
-                if (child.name === "Cube") {
+    if (child.name === "Cube") {
+        child.visible = false;
+        child.userData.ignoreCollision = true;
+        return;
+    }
 
-                    child.visible = false;
+    const glassNames = [
+        "M_Glass_Darker",
+        "glass",
+        "win_glass"
+    ];
 
-                    child.userData.ignoreCollision = true;
+    function replaceMaterial(mat) {
 
-                    return;
-                }
+        if (!mat || !mat.name) return mat;
 
-                // Glass materials
-                if (
-                    child.material &&
-                    (
-                        child.material.name === "M_Glass_Darker" ||
-                        child.material.name === "glass" ||
-                        child.material.name === "win_glass"
-                    )
-                ) {
+        console.log("Material found:", mat.name);
 
-                    child.material =
-                        new THREE.MeshPhysicalMaterial({
+        if (glassNames.includes(mat.name)) {
+            return new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                transmission: 1,
+                transparent: true,
+                opacity: 0.08,
+                roughness: 0,
+                metalness: 0,
+                thickness: 0,
+                ior: 1.45,
+                depthWrite: false,
+                side: THREE.DoubleSide
+            });
+        }
 
-                            color: 0xffffff,
+        if (mat.name === "Black") {
+            return new THREE.MeshBasicMaterial({
+                color: 0x000000
+            });
+        }
 
-                            transmission: 1,
+        return mat;
+    }
 
-                            transparent: true,
-
-                            opacity: 0.08,
-
-                            roughness: 0,
-
-                            metalness: 0,
-
-                            thickness: 0,
-
-                            ior: 1.45,
-
-                            depthWrite: false,
-
-                            side: THREE.DoubleSide
-                        });
-                }
-
-                // Pure black material
-                if (
-                    child.material &&
-                    child.material.name === "Black"
-                ) {
-
-                    child.material =
-                        new THREE.MeshBasicMaterial({
-
-                            color: 0x000000
-
-                        });
+    if (Array.isArray(child.material)) {
+        child.material = child.material.map(replaceMaterial);
+    } else {
+        child.material = replaceMaterial(child.material);
+    }
+});
                 }
 
             });
