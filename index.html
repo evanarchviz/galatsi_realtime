@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+<title>Evans Archviz Experience</title>
+
+<link rel="stylesheet" href="styles/style.css">
+
+<!-- iOS PWA Support -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Archviz">
+
+<style>
+  html, body {
+    margin:0;
+    padding:0;
+    height:100%;
+    overflow:hidden;
+    background:black;
+    touch-action:none;
+  }
+
+  body {
+    position:fixed;
+    width:100%;
+    height:100%;
+  }
+
+  #rotateOverlay {
+    display:none;
+    position:absolute;
+    inset:0;
+    background:#000;
+    color:white;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    z-index:20;
+    padding:20px;
+  }
+
+  #iosInstallHint {
+    display:none;
+    margin-top:15px;
+    font-size:0.9rem;
+    opacity:0.8;
+  }
+</style>
+
+</head>
+<body>
+
+<div id="startScreen">
+  <h1>ENTER EXPERIENCE</h1>
+
+  <div id="desktopInstructions">
+    <p>WASD to move</p>
+    <p>Mouse to look</p>
+    <p>ESC to unlock</p>
+  </div>
+
+  <div id="mobileInstructions" style="display:none;">
+    <p>Left thumb: Move</p>
+    <p>Right side swipe: Look</p>
+    <p>Rotate device to landscape</p>
+
+    <div id="iosInstallHint">
+      For best fullscreen experience on iPhone:<br>
+      Tap Share → Add to Home Screen
+    </div>
+  </div>
+</div>
+
+<div id="rotateOverlay">
+  <div>
+    <h2>Please rotate your device</h2>
+    <p>This experience is landscape only.</p>
+  </div>
+</div>
+
+<div id="container"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script>
+function isMobile(){
+  return (
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints && navigator.maxTouchPoints > 2)
+  );
+}
+
+function isIOS(){
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+const mobile = isMobile();
+const ios = isIOS();
+
+const mobileUI = document.getElementById("mobileInstructions");
+const desktopUI = document.getElementById("desktopInstructions");
+const rotateOverlay = document.getElementById("rotateOverlay");
+const iosHint = document.getElementById("iosInstallHint");
+const startScreen = document.getElementById("startScreen");
+
+if(mobile){
+  mobileUI.style.display = "block";
+  desktopUI.style.display = "none";
+}
+
+if(ios){
+  iosHint.style.display = "block";
+}
+
+function checkOrientation(){
+  if(!mobile) return;
+
+  if(window.innerHeight > window.innerWidth){
+    rotateOverlay.style.display = "flex";
+    startScreen.style.pointerEvents = "none";
+  } else {
+    rotateOverlay.style.display = "none";
+    startScreen.style.pointerEvents = "auto";
+  }
+}
+
+checkOrientation();
+window.addEventListener("resize", checkOrientation);
+window.addEventListener("orientationchange", checkOrientation);
+</script>
+
+<script type="module" src="src/main.js"></script>
+
+</body>
+</html>
