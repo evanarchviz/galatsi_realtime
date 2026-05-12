@@ -176,58 +176,98 @@ async function init(){
 
             model = gltf.scene;
 
-model.traverse((child) => {
+            model.traverse((child) => {
 
-    if (!child.isMesh) return;
+                if (!child.isMesh) return;
 
-    if (child.name === "Cube") {
-        child.visible = false;
-        child.userData.ignoreCollision = true;
-        return;
-    }
+                // Hide helper cube
+                if (child.name === "Cube") {
 
-    const glassNames = [
-        "M_Glass_Darker",
-        "glass",
-        "win_glass"
-    ];
+                    child.visible = false;
 
-    function replaceMaterial(mat) {
+                    child.userData.ignoreCollision = true;
 
-        if (!mat || !mat.name) return mat;
+                    return;
+                }
 
-        console.log("Material found:", mat.name);
+                const glassNames = [
+                    "M_Glass_Darker",
+                    "glass",
+                    "win_glass"
+                ];
 
-        if (glassNames.includes(mat.name)) {
-            return new THREE.MeshPhysicalMaterial({
-                color: 0xffffff,
-                transmission: 1,
-                transparent: true,
-                opacity: 0.08,
-                roughness: 0,
-                metalness: 0,
-                thickness: 0,
-                ior: 1.45,
-                depthWrite: false,
-                side: THREE.DoubleSide
-            });
-        }
+                function replaceMaterial(mat) {
 
-        if (mat.name === "Black") {
-            return new THREE.MeshBasicMaterial({
-                color: 0x000000
-            });
-        }
+                    if (!mat || !mat.name)
+                        return mat;
 
-        return mat;
-    }
+                    console.log(
+                        "Material found:",
+                        mat.name
+                    );
 
-    if (Array.isArray(child.material)) {
-        child.material = child.material.map(replaceMaterial);
-    } else {
-        child.material = replaceMaterial(child.material);
-    }
-});
+                    // Glass materials
+                    if (
+                        glassNames.some(name =>
+                            mat.name.includes(name)
+                        )
+                    ) {
+
+                        return new THREE.MeshPhysicalMaterial({
+
+                            color: 0xffffff,
+
+                            transmission: 1,
+
+                            transparent: true,
+
+                            opacity: 0.08,
+
+                            roughness: 0,
+
+                            metalness: 0,
+
+                            thickness: 0,
+
+                            ior: 1.45,
+
+                            depthWrite: false,
+
+                            side: THREE.DoubleSide
+
+                        });
+                    }
+
+                    // Black material
+                    if (
+                        mat.name.includes("Black")
+                    ) {
+
+                        return new THREE.MeshBasicMaterial({
+
+                            color: 0x000000
+
+                        });
+                    }
+
+                    return mat;
+                }
+
+                if (
+                    Array.isArray(child.material)
+                ) {
+
+                    child.material =
+                        child.material.map(
+                            replaceMaterial
+                        );
+
+                } else {
+
+                    child.material =
+                        replaceMaterial(
+                            child.material
+                        );
                 }
 
             });
@@ -250,7 +290,8 @@ model.traverse((child) => {
             "pointerlockchange",
             () => {
 
-                if (renderer.xr.isPresenting) return;
+                if (renderer.xr.isPresenting)
+                    return;
 
                 if (
                     document.pointerLockElement ===
@@ -276,7 +317,8 @@ model.traverse((child) => {
             "mousemove",
             (e) => {
 
-                if (renderer.xr.isPresenting) return;
+                if (renderer.xr.isPresenting)
+                    return;
 
                 if (
                     document.pointerLockElement !==
@@ -306,7 +348,8 @@ model.traverse((child) => {
 
             async () => {
 
-                startScreen.style.display = "none";
+                startScreen.style.display =
+                    "none";
 
                 canMove = true;
 
@@ -336,7 +379,8 @@ model.traverse((child) => {
             canMove = true;
 
             if (startScreen)
-                startScreen.style.display = "none";
+                startScreen.style.display =
+                    "none";
 
             document.exitPointerLock?.();
 
@@ -356,7 +400,8 @@ model.traverse((child) => {
 
             if (startScreen) {
 
-                startScreen.style.display = "flex";
+                startScreen.style.display =
+                    "flex";
 
                 if (controlsText) {
 
@@ -369,35 +414,41 @@ model.traverse((child) => {
         }
     );
 
-    document.addEventListener("keydown", (e) => {
+    document.addEventListener(
+        "keydown",
+        (e) => {
 
-        if (e.code === "KeyW")
-            move.forward = true;
+            if (e.code === "KeyW")
+                move.forward = true;
 
-        if (e.code === "KeyS")
-            move.backward = true;
+            if (e.code === "KeyS")
+                move.backward = true;
 
-        if (e.code === "KeyA")
-            move.left = true;
+            if (e.code === "KeyA")
+                move.left = true;
 
-        if (e.code === "KeyD")
-            move.right = true;
-    });
+            if (e.code === "KeyD")
+                move.right = true;
+        }
+    );
 
-    document.addEventListener("keyup", (e) => {
+    document.addEventListener(
+        "keyup",
+        (e) => {
 
-        if (e.code === "KeyW")
-            move.forward = false;
+            if (e.code === "KeyW")
+                move.forward = false;
 
-        if (e.code === "KeyS")
-            move.backward = false;
+            if (e.code === "KeyS")
+                move.backward = false;
 
-        if (e.code === "KeyA")
-            move.left = false;
+            if (e.code === "KeyA")
+                move.left = false;
 
-        if (e.code === "KeyD")
-            move.right = false;
-    });
+            if (e.code === "KeyD")
+                move.right = false;
+        }
+    );
 
     renderer.setAnimationLoop(animate);
 }
