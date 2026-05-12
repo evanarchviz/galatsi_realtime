@@ -1,10 +1,10 @@
-import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
-import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
-import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { GLTFLoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "https://unpkg.com/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js";
+import { RGBELoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js";
+import { VRButton } from "https://unpkg.com/three@0.160.0/examples/jsm/webxr/VRButton.js";
 
-let scene, camera, renderer, controls;
+let scene, camera, renderer;
 let model;
 let clock = new THREE.Clock();
 
@@ -14,45 +14,52 @@ let isMobile = false;
 
 let yawObject;
 let pitchObject;
+let pitch = 0;
 
-const playerHeight = 1.5;
+const playerHeight = 1.7;
 const playerRadius = 0.35;
 const speed = 4.5;
+const vrSpeed = 2.2;
 const stepHeight = 0.2;
 let playerBaseY = 0;
 
-const SPAWN = new THREE.Vector3(0, 1.5, 5);
+const SPAWN = new THREE.Vector3(-8.7799, 6.67481, 12.5123);
 
 init();
 
 function detectMobile() {
-    return (
-        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-        (navigator.maxTouchPoints && navigator.maxTouchPoints > 2)
-    );
+    const uaMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
+    const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+    const smallScreen = window.innerWidth < 900;
+    return uaMobile || (coarsePointer && smallScreen);
 }
 
 async function init(){
 
     isMobile = detectMobile();
 
-    const container = document.getElementById("container");
+    const container = document.getElementById("container") || document.body;
     const startScreen = document.getElementById("startScreen");
+    const controlsText = document.getElementById("controlsText");
+
+    if (controlsText) {
+        controlsText.innerText = isMobile
+            ? "Left side = Move • Right side = Look"
+            : "WASD to move • Mouse to look • ESC to unlock";
+    }
 
     scene = new THREE.Scene();
 
-    camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        800 // reduced far plane for better precision
-    );
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 800);
 
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
+
+    document.body.appendChild(VRButton.createButton(renderer));
 
     window.addEventListener("resize", () => {
         camera.aspect = window.innerWidth / window.innerHeight;
@@ -60,66 +67,132 @@ async function init(){
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // --- FPS hierarchy ---
     yawObject = new THREE.Object3D();
     pitchObject = new THREE.Object3D();
 
+    yawObject.position.copy(SPAWN);
     yawObject.add(pitchObject);
     pitchObject.add(camera);
     scene.add(yawObject);
 
-    yawObject.position.copy(SPAWN);
+    playerBaseY = SPAWN.y - playerHeight;
 
-    // --- HDR background ONLY (no lighting) ---
-    const rgbeLoader = new RGBELoader();
-    rgbeLoader.setPath("./assets/");
-    rgbeLoader.load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
-        hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
-        scene.background = hdrTexture;
-    });
+    const pmrem = new THREE.PMREMGenerator(renderer);
+
+    new RGBELoader()
+        .setPath("assets/")
+        .load("fouriesburg_mountain_midday_2k.hdr", (hdrTexture) => {
+            hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
+            hdrTexture.center.set(0.5, 0.5);
+            hdrTexture.rotation = Math.PI / 2;
+
+            scene.background = hdrTexture;
+            scene.environment = pmrem.fromEquirectangular(hdrTexture).texture;
+
+            pmrem.dispose();
+        });
 
     await MeshoptDecoder.ready;
 
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
 
-    loader.load("./assets/scene.glb", (gltf) => {
+    loader.load("assets/scene.glb", (gltf) => {
         model = gltf.scene;
-        scene.add(model);
+
         model.traverse((child) => {
-    if (child.isMesh && child.name === "Cube") {
-        child.visible = false;
-    }
-});
-        playerBaseY = SPAWN.y - playerHeight;
+            if (!child.isMesh) return;
+
+            if (child.name === "Cube") {
+                child.visible = false;
+                child.userData.ignoreCollision = true;
+                return;
+            }
+
+            if (child.material && child.material.name === "M_Glass_Darker") {
+                child.material = new THREE.MeshPhysicalMaterial({
+                    color: 0xffffff,
+                    transmission: 1,
+                    transparent: true,
+                    opacity: 0.08,
+                    roughness: 0,
+                    metalness: 0,
+                    thickness: 0,
+                    ior: 1.45,
+                    depthWrite: false,
+                    side: THREE.DoubleSide
+                });
+            }
+        });
+
+        scene.add(model);
     });
 
-    controls = new PointerLockControls(camera, document.body);
-
     if (!isMobile) {
-        startScreen.addEventListener("click", () => controls.lock());
+        startScreen?.addEventListener("click", () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener("pointerlockchange", () => {
+            if (renderer.xr.isPresenting) return;
+
+            if (document.pointerLockElement === document.body) {
+                if (startScreen) startScreen.style.display = "none";
+                canMove = true;
+            } else {
+                if (startScreen) startScreen.style.display = "flex";
+                canMove = false;
+            }
+        });
+
+        document.addEventListener("mousemove", (e) => {
+            if (renderer.xr.isPresenting) return;
+            if (document.pointerLockElement !== document.body) return;
+
+            yawObject.rotation.y -= e.movementX * 0.002;
+
+            pitch -= e.movementY * 0.002;
+            pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+            pitchObject.rotation.x = pitch;
+        });
     } else {
-        startScreen.addEventListener("click", async () => {
+        startScreen?.addEventListener("click", async () => {
             startScreen.style.display = "none";
             canMove = true;
 
             if (document.documentElement.requestFullscreen) {
-                try { await document.documentElement.requestFullscreen(); } catch(e){}
+                try {
+                    await document.documentElement.requestFullscreen();
+                } catch(e) {}
             }
 
             setupMobileControls();
         });
     }
 
-    controls.addEventListener("lock", () => {
-        startScreen.style.display = "none";
+    renderer.xr.addEventListener("sessionstart", () => {
         canMove = true;
+
+        if (startScreen) startScreen.style.display = "none";
+
+        document.exitPointerLock?.();
+
+        yawObject.rotation.set(0, 0, 0);
+        pitchObject.rotation.set(0, 0, 0);
+        pitch = 0;
     });
 
-    controls.addEventListener("unlock", () => {
-        if (!isMobile) {
+    renderer.xr.addEventListener("sessionend", () => {
+        canMove = false;
+
+        if (startScreen) {
             startScreen.style.display = "flex";
-            canMove = false;
+
+            if (controlsText) {
+                controlsText.innerText = isMobile
+                    ? "Left side = Move • Right side = Look"
+                    : "WASD to move • Mouse to look • ESC to unlock";
+            }
         }
     });
 
@@ -137,10 +210,11 @@ async function init(){
         if (e.code === "KeyD") move.right = false;
     });
 
-    animate();
+    renderer.setAnimationLoop(animate);
 }
 
 function setupMobileControls() {
+    if (document.querySelector(".joystick")) return;
 
     const joystick = document.createElement("div");
     joystick.className = "joystick";
@@ -152,17 +226,13 @@ function setupMobileControls() {
 
     let joystickTouchId = null;
     let lookTouchId = null;
-
     let centerX = 0;
     let centerY = 0;
-
     let lastLookX = 0;
     let lastLookY = 0;
-    let pitch = 0;
 
     document.addEventListener("touchstart", (e) => {
         for (let touch of e.changedTouches) {
-
             if (touch.clientX < window.innerWidth / 2 && joystickTouchId === null) {
                 joystickTouchId = touch.identifier;
 
@@ -177,13 +247,13 @@ function setupMobileControls() {
                 lastLookY = touch.clientY;
             }
         }
-    });
+    }, { passive:false });
 
     document.addEventListener("touchmove", (e) => {
+        e.preventDefault();
+
         for (let touch of e.changedTouches) {
-
             if (touch.identifier === joystickTouchId) {
-
                 const dx = touch.clientX - centerX;
                 const dy = touch.clientY - centerY;
 
@@ -200,7 +270,6 @@ function setupMobileControls() {
             }
 
             if (touch.identifier === lookTouchId) {
-
                 const deltaX = touch.clientX - lastLookX;
                 const deltaY = touch.clientY - lastLookY;
 
@@ -210,19 +279,22 @@ function setupMobileControls() {
                 yawObject.rotation.y -= deltaX * 0.002;
 
                 pitch -= deltaY * 0.002;
-                pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+                pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
                 pitchObject.rotation.x = pitch;
             }
         }
-    });
+    }, { passive:false });
 
     document.addEventListener("touchend", (e) => {
         for (let touch of e.changedTouches) {
-
             if (touch.identifier === joystickTouchId) {
                 joystickTouchId = null;
                 stick.style.transform = "translate(0,0)";
-                move.forward = move.backward = move.left = move.right = false;
+
+                move.forward = false;
+                move.backward = false;
+                move.left = false;
+                move.right = false;
             }
 
             if (touch.identifier === lookTouchId) {
@@ -232,82 +304,144 @@ function setupMobileControls() {
     });
 }
 
-function animate(){
-    requestAnimationFrame(animate);
+function getDesktopMovementVector(delta) {
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    forward.normalize();
 
-    const delta = clock.getDelta();
+    const right = new THREE.Vector3();
+    right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
-    if (canMove && model){
+    const movement = new THREE.Vector3();
+
+    if (move.forward) movement.add(forward);
+    if (move.backward) movement.addScaledVector(forward, -1);
+    if (move.left) movement.addScaledVector(right, -1);
+    if (move.right) movement.add(right);
+
+    if (movement.length() > 0) {
+        movement.normalize();
+        movement.multiplyScalar(speed * delta);
+    }
+
+    return movement;
+}
+
+function getVRMovementVector(delta) {
+    const session = renderer.xr.getSession();
+    if (!session) return new THREE.Vector3();
+
+    const movement = new THREE.Vector3();
+
+    for (const source of session.inputSources) {
+        const gamepad = source.gamepad;
+        if (!gamepad || !gamepad.axes || gamepad.axes.length < 2) continue;
+
+        let x = 0;
+        let y = 0;
+
+        if (gamepad.axes.length >= 4) {
+            x = gamepad.axes[2];
+            y = gamepad.axes[3];
+        } else {
+            x = gamepad.axes[0];
+            y = gamepad.axes[1];
+        }
+
+        const deadzone = 0.15;
+
+        if (Math.abs(x) < deadzone) x = 0;
+        if (Math.abs(y) < deadzone) y = 0;
+
+        if (x === 0 && y === 0) continue;
+
+        const xrCamera = renderer.xr.getCamera(camera);
 
         const forward = new THREE.Vector3();
-        camera.getWorldDirection(forward);
+        xrCamera.getWorldDirection(forward);
         forward.y = 0;
         forward.normalize();
 
         const right = new THREE.Vector3();
         right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
 
-        const movement = new THREE.Vector3();
+        movement.addScaledVector(forward, -y);
+        movement.addScaledVector(right, x);
+    }
 
-        if (move.forward) movement.add(forward);
-        if (move.backward) movement.addScaledVector(forward, -1);
-        if (move.left) movement.addScaledVector(right, -1);
-        if (move.right) movement.add(right);
+    if (movement.length() > 0) {
+        movement.normalize();
+        movement.multiplyScalar(vrSpeed * delta);
+    }
 
-        if (movement.length() > 0){
-            movement.normalize();
-            movement.multiplyScalar(speed * delta);
-        }
+    return movement;
+}
 
-        const proposed = yawObject.position.clone().add(movement);
+function applyMovement(movement) {
+    if (!model) return;
 
-        if (movement.length() > 0){
-            const midHeight = playerBaseY + playerHeight * 0.5;
+    const proposed = yawObject.position.clone().add(movement);
 
-            const ray = new THREE.Raycaster(
-                new THREE.Vector3(
-                    yawObject.position.x,
-                    midHeight,
-                    yawObject.position.z
-                ),
-                movement.clone().normalize(),
-                0,
-                playerRadius
-            );
+    if (movement.length() > 0) {
+        const midHeight = playerBaseY + playerHeight * 0.5;
 
-            const hits = ray.intersectObject(model, true);
-
-            if (hits.length === 0){
-                yawObject.position.copy(proposed);
-            }
-        }
-
-        const footRay = new THREE.Raycaster(
+        const ray = new THREE.Raycaster(
             new THREE.Vector3(
                 yawObject.position.x,
-                playerBaseY + stepHeight,
+                midHeight,
                 yawObject.position.z
             ),
-            new THREE.Vector3(0,-1,0),
+            movement.clone().normalize(),
             0,
-            stepHeight + 0.5
+            playerRadius
         );
 
-        const groundHits = footRay.intersectObject(model, true);
+        const hits = ray
+            .intersectObject(model, true)
+            .filter(hit => !hit.object.userData.ignoreCollision);
 
-        if (groundHits.length > 0){
-            playerBaseY = groundHits[0].point.y;
+        if (hits.length === 0) {
+            yawObject.position.copy(proposed);
         }
+    }
 
-        yawObject.position.y = playerBaseY + playerHeight;
+    const footRay = new THREE.Raycaster(
+        new THREE.Vector3(
+            yawObject.position.x,
+            playerBaseY + stepHeight,
+            yawObject.position.z
+        ),
+        new THREE.Vector3(0,-1,0),
+        0,
+        stepHeight + 0.5
+    );
+
+    const groundHits = footRay
+        .intersectObject(model, true)
+        .filter(hit => !hit.object.userData.ignoreCollision);
+
+    if (groundHits.length > 0) {
+        playerBaseY = groundHits[0].point.y;
+    }
+
+    if (renderer.xr.isPresenting) {
+    yawObject.position.y = playerBaseY;
+} else {
+    yawObject.position.y = playerBaseY + playerHeight;
+}
+}
+
+function animate(){
+    const delta = clock.getDelta();
+
+    if (canMove && model) {
+        const movement = renderer.xr.isPresenting
+            ? getVRMovementVector(delta)
+            : getDesktopMovementVector(delta);
+
+        applyMovement(movement);
     }
 
     renderer.render(scene, camera);
 }
-
-
-
-
-
-
-
