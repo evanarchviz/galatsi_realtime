@@ -31,9 +31,9 @@ const stepHeight = 0.2;
 let playerBaseY = 0;
 
 const SPAWN = new THREE.Vector3(
-    -8.7799,
-    6.67481,
-    12.5123
+    0,
+    1.7,
+    0
 );
 
 init();
