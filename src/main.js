@@ -326,10 +326,10 @@ async function init(){
                 ) return;
 
                 yawObject.rotation.y -=
-                    e.movementX * 0.002;
+                    e.movementX * 0.004;
 
                 pitch -=
-                    e.movementY * 0.002;
+                    e.movementY * 0.004;
 
                 pitch = Math.max(
                     -Math.PI / 2,
