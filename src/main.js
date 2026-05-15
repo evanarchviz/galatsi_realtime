@@ -26,7 +26,7 @@ let verticalVelocity = 0;
 let isGrounded = false;
 let rightTurnReady = true;
 
-const playerHeight = 1.7;
+const playerHeight = 1.5;
 const playerRadius = 0.35;
 const speed = 2;
 const vrSpeed = 2;
