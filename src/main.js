@@ -41,7 +41,7 @@ const rightTeleportThreshold = 0.75;
 const rightTeleportResetThreshold = 0.25;
 const teleportRayDistance = 25;
 const teleportMarkerYOffset = 0.025;
-const SPAWN = new THREE.Vector3(-8, 6.67481, 12);
+const SPAWN = new THREE.Vector3(0, 1.5, 0);
 
 const ui = {
     loadingScreen: document.getElementById("loadingScreen"),
