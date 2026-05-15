@@ -55,6 +55,21 @@
 </head>
 <body>
 
+<div id="loadingScreen" aria-live="polite">
+  <div class="loading-card">
+    <h1>LOADING EXPERIENCE</h1>
+    <p id="loadingStatus">Preparing scene...</p>
+
+    <div class="progress-track" aria-hidden="true">
+      <div id="loadingProgress" class="progress-fill"></div>
+    </div>
+
+    <div id="loadingPercent">0%</div>
+    <div id="loadingError" role="alert"></div>
+    <button id="reloadButton" type="button">Reload</button>
+  </div>
+</div>
+
 <div id="startScreen">
   <h1>ENTER EXPERIENCE</h1>
 
@@ -95,6 +110,44 @@
 </script>
 
 <script>
+function showBootLoadError(title, detail){
+  const loadingScreen = document.getElementById("loadingScreen");
+  const loadingStatus = document.getElementById("loadingStatus");
+  const loadingError = document.getElementById("loadingError");
+  const reloadButton = document.getElementById("reloadButton");
+
+  if(!loadingScreen || !loadingError) return;
+
+  loadingScreen.style.display = "flex";
+  if(loadingStatus) loadingStatus.textContent = title;
+  loadingError.style.display = "block";
+  loadingError.textContent = detail || "The experience could not start.";
+
+  if(reloadButton){
+    reloadButton.style.display = "inline-block";
+    reloadButton.onclick = () => window.location.reload();
+  }
+}
+
+window.addEventListener("error", function(event){
+  const target = event.target;
+  const isResourceError = target && target !== window;
+
+  if(isResourceError && target.tagName !== "SCRIPT") return;
+
+  const detail = isResourceError
+    ? `Failed to load ${target.src || target.href || "a required script"}`
+    : (event.message || "Unexpected startup error.");
+
+  showBootLoadError("Experience failed to start.", detail);
+}, true);
+
+window.addEventListener("unhandledrejection", function(event){
+  const reason = event.reason;
+  const detail = reason && reason.message ? reason.message : String(reason || "Unhandled startup error.");
+  showBootLoadError("Experience failed to start.", detail);
+});
+
 function isMobile(){
   return (
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -141,6 +194,7 @@ window.addEventListener("resize", checkOrientation);
 window.addEventListener("orientationchange", checkOrientation);
 </script>
 
+<script type="module" src="src/split-model-loader.js"></script>
 <script type="module" src="src/main.js"></script>
 
 </body>
