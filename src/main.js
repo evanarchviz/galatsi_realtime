@@ -13,6 +13,7 @@ let rightTeleportRay = null;
 let teleportMarker = null;
 let pendingTeleportHit = null;
 let teleportReleaseReady = false;
+let mirrorEnvMap = null;
 
 const clock = new THREE.Clock();
 const move = { forward: false, backward: false, left: false, right: false };
@@ -126,6 +127,29 @@ function loadHDRI(pmrem) {
     });
 }
 
+function loadMirrorHDRI(pmrem) {
+    return new Promise((resolve) => {
+        new RGBELoader().load(
+            "assets/mirror_reflection.hdr",
+            (hdrTexture) => {
+                hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
+                mirrorEnvMap = pmrem.fromEquirectangular(hdrTexture).texture;
+                hdrTexture.dispose();
+                pmrem.dispose();
+                console.info("Mirror material custom reflection HDRI ready: assets/mirror_reflection.hdr");
+                resolve(true);
+            },
+            undefined,
+            (error) => {
+                console.warn("Mirror material custom reflection HDRI failed. Falling back to scene.environment.", error);
+                mirrorEnvMap = scene.environment;
+                pmrem.dispose();
+                resolve(false);
+            }
+        );
+    });
+}
+
 async function loadSceneModel() {
     setLoadingProgress(30, "Preparing model decoder...");
     await MeshoptDecoder.ready;
@@ -174,9 +198,27 @@ function makeMeshDoubleSided(mesh) {
 
 function processModel(root) {
     const glassNames = ["M_Glass_Darker", "glass", "win_glass"];
+    const mirrorNames = ["Mirror", "mirror", "M_Mirror"];
 
     function replaceMaterial(mat) {
         if (!mat || !mat.name) return mat;
+
+        if (mirrorNames.some((name) => mat.name.includes(name))) {
+            console.info("Replacing imported Mirror material with scripted mirror material:", mat.name);
+            return new THREE.MeshPhysicalMaterial({
+                name: `${mat.name}_Scripted`,
+                color: 0xffffff,
+                metalness: 1,
+                roughness: 0.02,
+                envMap: mirrorEnvMap || scene.environment,
+                envMapIntensity: 2.0,
+                reflectivity: 1,
+                clearcoat: 1,
+                clearcoatRoughness: 0,
+                side: THREE.DoubleSide
+            });
+        }
+
         if (glassNames.some((name) => mat.name.includes(name))) {
             return new THREE.MeshPhysicalMaterial({
                 color: 0xffffff,
@@ -404,6 +446,7 @@ async function init() {
     isGrounded = false;
 
     await loadHDRI(new THREE.PMREMGenerator(renderer));
+    await loadMirrorHDRI(new THREE.PMREMGenerator(renderer));
     await loadSceneModel();
     setupInputControls();
     renderer.setAnimationLoop(animate);
