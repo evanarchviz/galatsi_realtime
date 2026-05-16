@@ -209,12 +209,12 @@ function processModel(root) {
                 name: `${mat.name}_Scripted`,
                 color: 0xffffff,
                 metalness: 1,
-                roughness: 0.02,
+                roughness: 0.5,
                 envMap: mirrorEnvMap || scene.environment,
                 envMapIntensity: 2.0,
                 reflectivity: 1,
                 clearcoat: 1,
-                clearcoatRoughness: 0,
+                clearcoatRoughness: 0.5,
                 side: THREE.DoubleSide
             });
         }
