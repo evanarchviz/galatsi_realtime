@@ -1,4 +1,5 @@
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { GLTFLoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
 import { RGBELoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js";
 
 const CUSTOM_REFLECTION_HDRI_URL = "assets/mirror_reflection.hdr";
@@ -7,13 +8,9 @@ const CUSTOM_ENV_MAP_INTENSITY = 2.0;
 const MIRROR_ROUGHNESS = 0.02;
 const MIRROR_METALNESS = 1.0;
 
-let activeRenderer = null;
 let customReflectionEnvMapPromise = null;
 let customReflectionEnvMap = null;
 let loggedMaterialNames = false;
-let isLoadingEnvMap = false;
-
-const processedMaterials = new WeakSet();
 
 function nameMatches(value) {
     const name = String(value || "").toLowerCase();
@@ -27,12 +24,20 @@ function shouldOverrideMaterial(child, material) {
 function loadCustomReflectionEnvMap() {
     if (customReflectionEnvMap) return Promise.resolve(customReflectionEnvMap);
     if (customReflectionEnvMapPromise) return customReflectionEnvMapPromise;
-    if (!activeRenderer) return Promise.resolve(null);
-
-    isLoadingEnvMap = true;
 
     customReflectionEnvMapPromise = new Promise((resolve) => {
-        const pmrem = new THREE.PMREMGenerator(activeRenderer);
+        let tempRenderer = null;
+        let pmrem = null;
+
+        try {
+            tempRenderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: "low-power" });
+            tempRenderer.setSize(16, 16, false);
+            pmrem = new THREE.PMREMGenerator(tempRenderer);
+        } catch (error) {
+            console.warn("Custom mirror reflection HDRI not applied. Could not create temporary PMREM renderer.", error);
+            resolve(null);
+            return;
+        }
 
         new RGBELoader().load(
             CUSTOM_REFLECTION_HDRI_URL,
@@ -42,7 +47,8 @@ function loadCustomReflectionEnvMap() {
 
                 hdrTexture.dispose();
                 pmrem.dispose();
-                isLoadingEnvMap = false;
+                tempRenderer.dispose();
+                tempRenderer.domElement?.remove?.();
 
                 console.info("Custom mirror reflection HDRI loaded:", CUSTOM_REFLECTION_HDRI_URL);
                 resolve(customReflectionEnvMap);
@@ -50,8 +56,9 @@ function loadCustomReflectionEnvMap() {
             undefined,
             (error) => {
                 console.warn(`Custom mirror reflection HDRI not applied. Could not load ${CUSTOM_REFLECTION_HDRI_URL}.`, error);
-                pmrem.dispose();
-                isLoadingEnvMap = false;
+                pmrem?.dispose();
+                tempRenderer?.dispose();
+                tempRenderer?.domElement?.remove?.();
                 customReflectionEnvMapPromise = null;
                 resolve(null);
             }
@@ -87,7 +94,6 @@ function makeMirrorMaterial(child, sourceMaterial, envMap) {
     material.roughness = MIRROR_ROUGHNESS;
     material.needsUpdate = true;
 
-    processedMaterials.add(material);
     return material;
 }
 
@@ -116,33 +122,33 @@ function applyCustomReflectionEnvMap(root, envMap) {
         if (Array.isArray(child.material)) {
             child.material = child.material.map((material) => {
                 if (!shouldOverrideMaterial(child, material)) return material;
-                if (processedMaterials.has(material)) return material;
-
                 const mirrorMaterial = makeMirrorMaterial(child, material, envMap);
                 console.info("Applied custom mirror reflection to material:", mirrorMaterial.name || "unnamed material", "on mesh:", child.name || "unnamed mesh");
                 return mirrorMaterial;
             });
-        } else if (shouldOverrideMaterial(child, child.material) && !processedMaterials.has(child.material)) {
+        } else if (shouldOverrideMaterial(child, child.material)) {
             child.material = makeMirrorMaterial(child, child.material, envMap);
             console.info("Applied custom mirror reflection to material:", child.material.name || "unnamed material", "on mesh:", child.name || "unnamed mesh");
         }
     });
 }
 
-function requestReflectionApply(sceneRoot) {
-    if (!sceneRoot || isLoadingEnvMap) return;
-
-    loadCustomReflectionEnvMap().then((envMap) => {
-        if (!envMap) return;
-        applyCustomReflectionEnvMap(sceneRoot, envMap);
-    });
-}
-
-const originalRender = THREE.WebGLRenderer.prototype.render;
-THREE.WebGLRenderer.prototype.render = function patchedRender(scene, camera) {
-    activeRenderer = this;
-    requestReflectionApply(scene);
-    return originalRender.call(this, scene, camera);
+const originalLoad = GLTFLoader.prototype.load;
+GLTFLoader.prototype.load = function patchedMaterialEnvLoad(url, onLoad, onProgress, onError) {
+    return originalLoad.call(
+        this,
+        url,
+        async (gltf) => {
+            const envMap = await loadCustomReflectionEnvMap();
+            applyCustomReflectionEnvMap(gltf.scene, envMap);
+            onLoad?.(gltf);
+            requestAnimationFrame(() => applyCustomReflectionEnvMap(gltf.scene, envMap));
+            setTimeout(() => applyCustomReflectionEnvMap(gltf.scene, envMap), 250);
+            setTimeout(() => applyCustomReflectionEnvMap(gltf.scene, envMap), 1000);
+        },
+        onProgress,
+        onError
+    );
 };
 
-console.info("Custom mirror reflection bridge active. Waiting for renderer...");
+console.info("Custom mirror reflection bridge active.");
