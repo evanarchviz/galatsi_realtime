@@ -2,7 +2,7 @@ import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 
 const MIRROR_MESH_NAME = "BathroomMirror1Mesh";
 const MIRROR_ENV_INTENSITY = 0.9;
-const MIRROR_ROUGHNESS = 0.16;
+const MIRROR_ROUGHNESS = 0.5;
 const MIRROR_METALNESS = 1.0;
 const MIRROR_CLEARCOAT = 0.5;
 const MIRROR_CLEARCOAT_ROUGHNESS = 0.08;
