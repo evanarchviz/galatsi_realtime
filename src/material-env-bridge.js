@@ -3,19 +3,22 @@ import { GLTFLoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders
 import { RGBELoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js";
 
 const CUSTOM_REFLECTION_HDRI_URL = "assets/mirror_reflection.hdr";
-const MIRROR_MATERIAL_NAMES = ["mirror", "καθρεφ"];
+const TARGET_MIRROR_MESH_NAMES = ["BathroomMirror1Mesh"];
 const CUSTOM_ENV_MAP_INTENSITY = 2.0;
+const MIRROR_ROUGHNESS = 0.02;
+const MIRROR_METALNESS = 1.0;
 
 let activeRenderer = null;
 let pendingRoots = new Set();
 let customReflectionEnvMapPromise = null;
 let customReflectionEnvMap = null;
-let loggedMaterialNames = false;
+let loggedMeshNames = false;
 let applyScheduled = false;
 
-function materialNameMatches(material) {
-    const name = String(material?.name || "").toLowerCase();
-    return MIRROR_MATERIAL_NAMES.some((term) => name.includes(term));
+const processedMeshes = new WeakSet();
+
+function isTargetMirrorMesh(child) {
+    return TARGET_MIRROR_MESH_NAMES.includes(child?.name || "");
 }
 
 function loadCustomReflectionEnvMap() {
@@ -35,12 +38,12 @@ function loadCustomReflectionEnvMap() {
                 hdrTexture.dispose();
                 pmrem.dispose();
 
-                console.info("Custom Mirror material reflection HDRI loaded:", CUSTOM_REFLECTION_HDRI_URL);
+                console.info("Custom bathroom mirror reflection HDRI loaded:", CUSTOM_REFLECTION_HDRI_URL);
                 resolve(customReflectionEnvMap);
             },
             undefined,
             (error) => {
-                console.warn(`Custom Mirror material reflection HDRI not applied. Could not load ${CUSTOM_REFLECTION_HDRI_URL}.`, error);
+                console.warn(`Custom bathroom mirror reflection HDRI not applied. Could not load ${CUSTOM_REFLECTION_HDRI_URL}.`, error);
                 pmrem.dispose();
                 customReflectionEnvMapPromise = null;
                 resolve(null);
@@ -51,41 +54,50 @@ function loadCustomReflectionEnvMap() {
     return customReflectionEnvMapPromise;
 }
 
-function logMaterialNamesOnce(root) {
-    if (loggedMaterialNames || !root) return;
-    loggedMaterialNames = true;
+function logMeshNamesOnce(root) {
+    if (loggedMeshNames || !root) return;
+    loggedMeshNames = true;
 
     const names = new Set();
     root.traverse((child) => {
-        if (!child.isMesh || !child.material) return;
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        for (const material of materials) names.add(material?.name || "unnamed");
+        if (child.isMesh) names.add(child.name || "unnamed");
     });
 
-    console.info("GLB material names:", Array.from(names).sort());
+    console.info("GLB mesh names:", Array.from(names).sort());
+}
+
+function cloneAndOverrideMaterial(material, envMap) {
+    const mirrorMaterial = material?.clone ? material.clone() : new THREE.MeshStandardMaterial();
+
+    mirrorMaterial.name = `${material?.name || "Mirror"}_BathroomMirrorCustomReflection`;
+    mirrorMaterial.envMap = envMap;
+    mirrorMaterial.envMapIntensity = CUSTOM_ENV_MAP_INTENSITY;
+
+    if ("metalness" in mirrorMaterial) mirrorMaterial.metalness = MIRROR_METALNESS;
+    if ("roughness" in mirrorMaterial) mirrorMaterial.roughness = MIRROR_ROUGHNESS;
+
+    mirrorMaterial.needsUpdate = true;
+    return mirrorMaterial;
 }
 
 function applyMirrorEnvMap(root, envMap) {
     if (!root || !envMap) return;
 
-    logMaterialNamesOnce(root);
+    logMeshNamesOnce(root);
 
     root.traverse((child) => {
         if (!child.isMesh || !child.material) return;
+        if (!isTargetMirrorMesh(child)) return;
+        if (processedMeshes.has(child)) return;
 
-        const applyToMaterial = (material) => {
-            if (!materialNameMatches(material)) return material;
+        if (Array.isArray(child.material)) {
+            child.material = child.material.map((material) => cloneAndOverrideMaterial(material, envMap));
+        } else {
+            child.material = cloneAndOverrideMaterial(child.material, envMap);
+        }
 
-            material.envMap = envMap;
-            material.envMapIntensity = CUSTOM_ENV_MAP_INTENSITY;
-            material.needsUpdate = true;
-
-            console.info("Applied custom reflection only to Mirror material:", material.name || "unnamed material", "on mesh:", child.name || "unnamed mesh");
-            return material;
-        };
-
-        if (Array.isArray(child.material)) child.material = child.material.map(applyToMaterial);
-        else child.material = applyToMaterial(child.material);
+        processedMeshes.add(child);
+        console.info("Applied custom reflection to target mirror mesh:", child.name);
     });
 }
 
@@ -126,4 +138,4 @@ THREE.WebGLRenderer.prototype.render = function patchedRender(scene, camera) {
     return originalRender.call(this, scene, camera);
 };
 
-console.info("Custom Mirror-only reflection bridge active.");
+console.info("Custom bathroom mirror mesh reflection bridge active.");
