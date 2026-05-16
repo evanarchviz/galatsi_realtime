@@ -209,7 +209,7 @@ function processModel(root) {
                 name: `${mat.name}_Scripted`,
                 color: 0xffffff,
                 metalness: 1,
-                roughness: 0.2,
+                roughness: 0.1,
                 envMap: mirrorEnvMap || scene.environment,
                 envMapIntensity: 2.0,
                 reflectivity: 1,
